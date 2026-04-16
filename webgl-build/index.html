@@ -6,8 +6,52 @@
     <title>Unity Web Player | Papua Showcase Museum</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <style>
+      #mobile-preload {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: linear-gradient(135deg, #1a0e05 0%, #2d1a0a 50%, #1a0e05 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 9999; font-family: 'Georgia', serif; color: #f2e0c8;
+      }
+      #mobile-preload h1 {
+        font-size: 24px; margin-bottom: 8px; color: #d9a625;
+        text-shadow: 0 2px 8px rgba(217,166,37,0.3);
+      }
+      #mobile-preload p { font-size: 14px; margin-bottom: 24px; opacity: 0.8; text-align: center; padding: 0 20px; }
+      #preload-btn {
+        background: linear-gradient(180deg, #d9a625, #a67c1a); color: #1a0e05;
+        border: none; padding: 16px 48px; font-size: 18px; font-weight: bold;
+        border-radius: 8px; cursor: pointer; letter-spacing: 1px;
+        box-shadow: 0 4px 15px rgba(217,166,37,0.4);
+        transition: transform 0.1s;
+      }
+      #preload-btn:active { transform: scale(0.95); }
+      #preload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      #preload-progress {
+        display: none; width: 80%; max-width: 300px; margin-top: 20px; text-align: center;
+      }
+      #preload-bar-bg {
+        width: 100%; height: 12px; background: rgba(255,255,255,0.15);
+        border-radius: 6px; overflow: hidden; margin-bottom: 8px;
+      }
+      #preload-bar { width: 0%; height: 100%; background: #d9a625; border-radius: 6px; transition: width 0.2s; }
+      #preload-status { font-size: 13px; opacity: 0.7; }
+      #preload-size { font-size: 12px; opacity: 0.5; margin-top: 8px; }
+    </style>
   </head>
   <body>
+    <!-- Mobile preload screen -->
+    <div id="mobile-preload" style="display:none;">
+      <h1>Galeri Noken Papua</h1>
+      <p>Virtual museum experience<br>~38 MB download required</p>
+      <button id="preload-btn" onclick="startPreload()">TAP TO LOAD</button>
+      <div id="preload-progress">
+        <div id="preload-bar-bg"><div id="preload-bar"></div></div>
+        <div id="preload-status">Downloading assets...</div>
+        <div id="preload-size"></div>
+      </div>
+    </div>
+
     <div id="unity-container" class="unity-desktop">
       <canvas id="unity-canvas" width=1920 height=1080 tabindex="-1"></canvas>
       <div id="unity-loading-bar">
@@ -25,13 +69,8 @@
     </div>
     <script>
       var canvas = document.querySelector("#unity-canvas");
+      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
       function unityShowBanner(msg, type) {
         var warningBanner = document.querySelector("#unity-warning");
         function updateBannerVisibility() {
@@ -63,71 +102,117 @@
         productName: "Papua Showcase Museum",
         productVersion: "9.2.1",
         showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
       };
 
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
+      if (isMobile) {
         var meta = document.createElement('meta');
         meta.name = 'viewport';
         meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
         document.getElementsByTagName('head')[0].appendChild(meta);
         document.querySelector("#unity-container").className = "unity-mobile";
         canvas.className = "unity-mobile";
+        config.devicePixelRatio = 1; // lower resolution for mobile performance
 
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
+        // Show preload screen, hide Unity until ready
+        document.getElementById("mobile-preload").style.display = "flex";
+        document.getElementById("unity-container").style.display = "none";
       } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
         canvas.style.width = "1920px";
         canvas.style.height = "1080px";
+        // Desktop: load immediately
+        document.querySelector("#unity-loading-bar").style.display = "block";
+        loadUnity();
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      // Pre-download assets into browser cache, then start Unity
+      function startPreload() {
+        var btn = document.getElementById("preload-btn");
+        btn.disabled = true;
+        btn.textContent = "LOADING...";
+        document.getElementById("preload-progress").style.display = "block";
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
+        var filesToPreload = [
+          config.dataUrl,
+          config.frameworkUrl,
+          config.codeUrl
+        ];
 
-              }).catch((message) => {
-                alert(message);
+        var totalLoaded = 0;
+        var totalSize = 0;
+        var loadedSize = 0;
+        var completed = 0;
+
+        // Fetch all files to cache them, track progress
+        var promises = filesToPreload.map(function(url) {
+          return fetch(url).then(function(response) {
+            var contentLength = response.headers.get('content-length');
+            var fileSize = contentLength ? parseInt(contentLength) : 0;
+            totalSize += fileSize;
+
+            var reader = response.body.getReader();
+            var chunks = [];
+
+            function read() {
+              return reader.read().then(function(result) {
+                if (result.done) {
+                  completed++;
+                  return;
+                }
+                loadedSize += result.value.length;
+                chunks.push(result.value);
+                updatePreloadProgress();
+                return read();
               });
+            }
+            return read();
+          });
+        });
+
+        Promise.all(promises).then(function() {
+          document.getElementById("preload-status").textContent = "Starting museum...";
+          document.getElementById("preload-bar").style.width = "100%";
+
+          // Small delay then start Unity
+          setTimeout(function() {
+            document.getElementById("mobile-preload").style.display = "none";
+            document.getElementById("unity-container").style.display = "";
+            document.querySelector("#unity-loading-bar").style.display = "block";
+            loadUnity();
+          }, 500);
+        }).catch(function(err) {
+          document.getElementById("preload-status").textContent = "Error: " + err.message + ". Tap to retry.";
+          btn.disabled = false;
+          btn.textContent = "RETRY";
+        });
+
+        function updatePreloadProgress() {
+          var pct = totalSize > 0 ? Math.min((loadedSize / totalSize) * 100, 100) : 0;
+          document.getElementById("preload-bar").style.width = pct.toFixed(1) + "%";
+          var mb = (loadedSize / 1048576).toFixed(1);
+          var totalMb = totalSize > 0 ? (totalSize / 1048576).toFixed(1) : "~38";
+          document.getElementById("preload-size").textContent = mb + " / " + totalMb + " MB";
+          document.getElementById("preload-status").textContent =
+            "Downloading... " + pct.toFixed(0) + "%";
+        }
+      }
+
+      function loadUnity() {
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          }).then((unityInstance) => {
+            document.querySelector("#unity-loading-bar").style.display = "none";
+            document.querySelector("#unity-fullscreen-button").onclick = () => {
+              unityInstance.SetFullscreen(1);
             };
-
-      document.body.appendChild(script);
-
+          }).catch((message) => {
+            alert(message);
+          });
+        };
+        document.body.appendChild(script);
+      }
     </script>
   </body>
 </html>
