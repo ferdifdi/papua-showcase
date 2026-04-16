@@ -1,0 +1,12 @@
+Assets/
+Library/
+Logs/
+Packages/
+ProjectSettings/
+Temp/
+UserSettings/
+GeneratedAssets/
+.vs/
+.vscode/
+*.csproj
+*.slnx
